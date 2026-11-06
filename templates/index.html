@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Hackathon Team Finder</title>
+  <style>
+    body { font-family: sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; }
+    input, button { padding: 8px; margin: 4px 0; width: 100%; box-sizing: border-box; }
+    .card { border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 8px 0; }
+  </style>
+</head>
+<body>
+  <h1>Hackathon Team Finder</h1>
+
+  <h2>Add yourself</h2>
+  <form id="add-form">
+    <input id="name" placeholder="Name">
+    <input id="skills" placeholder="Skills, comma separated (python, design)">
+    <input id="idea" placeholder="Project idea (optional)">
+    <button type="submit">Add</button>
+    <button type="button" id="suggest-btn">Suggest an idea from my skills</button>
+  </form>
+  <p id="suggestion"></p>
+
+  <h2>Find teammates</h2>
+  <input id="filter" placeholder="Filter by skill">
+  <div id="people"></div>
+
+  <script>
+    // GET: ask the backend for people and draw them
+    async function loadPeople() {
+      const skill = document.getElementById("filter").value;
+      const url = skill ? `/people?skill=${encodeURIComponent(skill)}` : "/people";
+      const res = await fetch(url);
+      const people = await res.json();
+      document.getElementById("people").innerHTML = people.map(p => `
+        <div class="card">
+          <strong>${p.name}</strong><br>
+          Skills: ${p.skills.join(", ")}<br>
+          Idea: ${p.idea || "Open to anything"}
+        </div>`).join("");
+    }
+
+    function getSkills() {
+      return document.getElementById("skills").value
+        .split(",").map(s => s.trim()).filter(s => s);
+    }
+
+    // POST: send a new person to the backend
+    document.getElementById("add-form").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const res = await fetch("/people", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: document.getElementById("name").value,
+          skills: getSkills(),
+          idea: document.getElementById("idea").value
+        })
+      });
+      if (!res.ok) { alert((await res.json()).error); return; }
+      e.target.reset();
+      loadPeople();
+    });
+
+    // POST to our backend, which calls Gemini with the secret key
+    document.getElementById("suggest-btn").addEventListener("click", async () => {
+      document.getElementById("suggestion").textContent = "Thinking...";
+      const res = await fetch("/suggest", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skills: getSkills() })
+      });
+      const data = await res.json();
+      document.getElementById("suggestion").textContent = data.idea || data.error;
+    });
+
+    document.getElementById("filter").addEventListener("input", loadPeople);
+    loadPeople();
+  </script>
+</body>
+</html>
